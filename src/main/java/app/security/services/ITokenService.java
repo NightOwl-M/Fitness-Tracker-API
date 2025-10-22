@@ -1,4 +1,4 @@
-package app.security.serivce;
+package app.security.services;
 
 public interface ITokenService {
 }

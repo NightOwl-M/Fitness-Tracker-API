@@ -1,0 +1,156 @@
+### 0) Health (public)
+GET http://localhost:7070/health
+
+
+### 1) Register USER  (skift email hvis 409)
+POST http://localhost:7070/auth/register
+Content-Type: application/json
+
+{ "email": "apiuser@fitness.dk", "password": "test123" }
+
+
+### 2) Login USER  -> gem {{JWT_USER}}
+POST http://localhost:7070/auth/login
+Content-Type: application/json
+
+{ "email": "apiuser@fitness.dk", "password": "test123" }
+
+> {%
+    const b = (typeof response.body === 'string') ? JSON.parse(response.body) : response.body;
+    client.global.set("JWT_USER", b.token);
+    client.log("JWT_USER stored");
+%}
+
+
+### 3) Register ADMIN (kør kun én gang – email skal være unik)
+POST http://localhost:7070/auth/register
+Content-Type: application/json
+
+{ "email": "apiadmin@fitness.dk", "password": "admin123" }
+
+
+### 4) (KØR I SQL ÉN GANG) – forfrem brugeren til ADMIN
+# docker exec -it ft-postgres psql -U app -d fitness \
+#   -c "UPDATE users SET role='ADMIN' WHERE email='apiadmin@fitness.dk';"
+
+
+### 5) Login ADMIN  -> gem {{JWT_ADMIN}}
+POST http://localhost:7070/auth/login
+Content-Type: application/json
+
+{ "email": "apiadmin@fitness.dk", "password": "admin123" }
+
+> {%
+    const b = (typeof response.body === 'string') ? JSON.parse(response.body) : response.body;
+    client.global.set("JWT_ADMIN", b.token);
+    client.log("JWT_ADMIN stored");
+%}
+
+
+### 6) /api/auth/me (kræver JWT – tjek payload)
+GET http://localhost:7070/api/auth/me
+Authorization: Bearer {{JWT_USER}}
+
+
+### 7) Exercises: list (kræver login)
+GET http://localhost:7070/api/exercises
+Authorization: Bearer {{JWT_USER}}
+
+
+### 8) Exercises: create (kræver ADMIN)
+POST http://localhost:7070/api/exercises
+Authorization: Bearer {{JWT_ADMIN}}
+Content-Type: application/json
+
+{ "name": "Push-up", "muscleGroup": "Chest" }
+
+> {%
+    const b = (typeof response.body === 'string') ? JSON.parse(response.body) : response.body;
+    const exId = b.id ?? b.exerciseId ?? b.data?.id;
+    if (exId != null) { client.global.set("EX_ID", exId.toString()); client.log("EX_ID stored = " + exId); }
+%}
+
+
+### 9) Exercises: get by id (kræver login)
+GET http://localhost:7070/api/exercises/{{EX_ID}}
+Authorization: Bearer {{JWT_USER}}
+
+
+### 10) Exercises: update (kræver ADMIN)
+PUT http://localhost:7070/api/exercises/{{EX_ID}}
+Authorization: Bearer {{JWT_ADMIN}}
+Content-Type: application/json
+
+{ "name": "Push-up (wide)", "muscleGroup": "Chest" }
+
+
+### 11) Exercises: delete (kræver ADMIN)
+DELETE http://localhost:7070/api/exercises/{{EX_ID}}
+Authorization: Bearer {{JWT_ADMIN}}
+
+
+### 12) Workouts: create (kræver login)
+POST http://localhost:7070/api/workouts
+Authorization: Bearer {{JWT_USER}}
+Content-Type: application/json
+
+{ "date": "2025-10-21", "notes": "Leg day" }
+
+> {%
+    const b = (typeof response.body === 'string') ? JSON.parse(response.body) : response.body;
+    const wId = b.id ?? b.workoutId ?? b.data?.id;
+    if (wId != null) { client.global.set("WORKOUT_ID", wId.toString()); client.log("WORKOUT_ID stored = " + wId); }
+%}
+
+
+### 13) Workouts: list mine (kræver login)
+GET http://localhost:7070/api/workouts
+Authorization: Bearer {{JWT_USER}}
+
+
+### 14) Workouts: get by id (kræver login)
+GET http://localhost:7070/api/workouts/{{WORKOUT_ID}}
+Authorization: Bearer {{JWT_USER}}
+
+
+### 15) Workouts: update (kræver login)
+PUT http://localhost:7070/api/workouts/{{WORKOUT_ID}}
+Authorization: Bearer {{JWT_USER}}
+Content-Type: application/json
+
+{ "date": "2025-10-22", "notes": "Leg day + core" }
+
+
+### 16) Workouts: delete (kræver login)
+DELETE http://localhost:7070/api/workouts/{{WORKOUT_ID}}
+Authorization: Bearer {{JWT_USER}}
+
+
+#######################################################
+# Negative tests (til rapport + hurtig validering)
+#######################################################
+
+### N1) 401 – manglende token
+GET http://localhost:7070/api/workouts
+
+### N2) 401 – ugyldig token
+GET http://localhost:7070/api/workouts
+Authorization: Bearer not-a-valid-jwt
+
+### N3) 403 – USER prøver at skabe exercise (kun ADMIN)
+POST http://localhost:7070/api/exercises
+Authorization: Bearer {{JWT_USER}}
+Content-Type: application/json
+
+{ "name": "Shoulder press", "muscleGroup": "Shoulders" }
+
+### N4) 404 – ikke-eksisterende exercise
+GET http://localhost:7070/api/exercises/999999
+Authorization: Bearer {{JWT_USER}}
+
+### N5) 400 – valideringsfejl ved create exercise (mangler name)
+POST http://localhost:7070/api/exercises
+Authorization: Bearer {{JWT_ADMIN}}
+Content-Type: application/json
+
+{ "muscleGroup": "Back" }
