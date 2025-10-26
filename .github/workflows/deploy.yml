@@ -24,6 +24,13 @@ jobs:
           cache: 'maven'
 
       - name: Run tests (unit + integration)
+        env:
+          DB_URL: "jdbc:tc:postgresql:16-alpine:///fitness"
+          DB_USER: "postgres"
+          DB_PASSWORD: "postgres"
+          HIBERNATE_SHOW_SQL: "false"
+          HIBERNATE_FORMAT_SQL: "false"
+          # Ikke sæt DEPLOYED her – vi vil blive i dev-grenen (der læser DB_* envs)
         run: mvn -B clean verify
 
       - name: Log in to Docker Hub
