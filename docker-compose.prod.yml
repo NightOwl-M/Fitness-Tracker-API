@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: fitness
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d fitness"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    image: mikkeldam/fitness-tracker-api:latest  # dit Docker Hub image
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+    ports:
+      - "7070:7070"
+    environment:
+      DEPLOYED: "1"
+      CONNECTION_STR: "jdbc:postgresql://postgres:5432/"
+      DB_NAME: "fitness"
+      DB_USERNAME: "app"
+      DB_PASSWORD: "secret"
+
+volumes:
+  pgdata:

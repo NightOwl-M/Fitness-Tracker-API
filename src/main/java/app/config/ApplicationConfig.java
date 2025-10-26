@@ -7,6 +7,7 @@ import app.security.controllers.impl.AccessController;
 import app.security.controllers.impl.AuthController;
 import app.security.utils.JwtUtil;
 import io.javalin.Javalin;
+import io.javalin.config.JavalinConfig;
 import io.javalin.http.Context;
 import io.javalin.http.ForbiddenResponse;
 import io.javalin.http.UnauthorizedResponse;
@@ -24,9 +25,9 @@ public final class ApplicationConfig {
     private ApplicationConfig() {}
 
     public static Javalin create() {
-        // Minimal setup
-        Javalin app = Javalin.create(cfg -> {
+        Javalin app = Javalin.create((JavalinConfig cfg) -> {
             cfg.http.defaultContentType = "application/json";
+            cfg.plugins.enableRouteOverview("/api/routes"); // ← aktiver route overview
         });
 
         // Global error handlers
@@ -78,11 +79,6 @@ public final class ApplicationConfig {
             System.out.printf("%s %s -> %s (%d ms)%n", method, path, status, durMs);
         });
 
-        // “Route overview” placeholder (kan skiftes til rigtigt plugin senere)
-        app.get("/api/routes", ctx -> ctx.json(Map.of(
-                "info", "Route overview plugin disabled in this build (using manual CORS)."
-        )));
-
         return app;
     }
 
@@ -96,6 +92,9 @@ public final class ApplicationConfig {
     // ======= Middleware & Guards =======
 
     private static void authenticate(Context ctx) {
+        // Gør route overview public (ingen JWT krævet)
+        if ("/api/routes".equals(ctx.path())) return;
+
         // OPTIONS = preflight → lad passere
         if ("OPTIONS".equalsIgnoreCase(String.valueOf(ctx.method()))) return;
 
@@ -105,7 +104,7 @@ public final class ApplicationConfig {
 
         String token = auth.substring("Bearer ".length());
         Integer userId = JwtUtil.userIdFrom(token);
-        String  role   = JwtUtil.roleFrom(token);
+        String role = JwtUtil.roleFrom(token);
 
         if (userId == null || role == null)
             throw new UnauthorizedResponse("Unauthorized");
@@ -113,6 +112,7 @@ public final class ApplicationConfig {
         ctx.attribute("userId", userId);
         ctx.attribute("role", role);
     }
+
 
     private static io.javalin.http.Handler guard(Consumer<Context> guard, io.javalin.http.Handler handler) {
         return ctx -> { guard.accept(ctx); handler.handle(ctx); };
